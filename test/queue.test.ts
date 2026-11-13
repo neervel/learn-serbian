@@ -37,7 +37,7 @@ test('daily limit stops new words; cards not yet due are not shown', () => {
   assert.equal(newIntroducedToday(db, user, NOON), 2);
   assert.equal(newAvailable(db, user, NOON), 0);
   const item = nextItem(db, user, NOON);
-  assert.deepEqual(item, { kind: 'done', nextDueAt: NOON + 3 * DAY });
+  assert.deepEqual(item, { kind: 'done' });
 });
 
 test('the limit resets the next day', () => {
@@ -79,7 +79,7 @@ test('users do not see each other\'s cards', () => {
 
 test('empty dictionary', () => {
   const db = makeDb(0);
-  assert.deepEqual(nextItem(db, makeUser(db), NOON), { kind: 'done', nextDueAt: null });
+  assert.deepEqual(nextItem(db, makeUser(db), NOON), { kind: 'done' });
 });
 
 test('an extra lesson adds exactly one more portion, today only, and can be repeated', () => {

@@ -1,6 +1,5 @@
 import type { Stats } from '../stats.ts';
 import { latToCyr } from '../text/translit.ts';
-import { localDate, localTime, addDays } from '../time.ts';
 import type { User, Word } from '../types.ts';
 
 export function esc(s: string): string {
@@ -53,9 +52,10 @@ function details(word: Word, user: User): string {
     lines.push(esc(srText(word.example_sr, user)));
     if (word.example_ru) lines.push(`<i>${esc(word.example_ru)}</i>`);
   }
-  if (word.false_friend || word.note) {
+  // Notes that only warn about a false friend ("not the Russian X") are not shown.
+  if (word.note && !word.false_friend) {
     lines.push('');
-    lines.push(`${word.false_friend ? '⚠️ Ложный друг. ' : '💡 '}${esc(word.note ?? '')}`.trim());
+    lines.push(`💡 ${esc(word.note)}`);
   }
   return lines.join('\n');
 }
@@ -76,31 +76,12 @@ export function answerText(word: Word, user: User, result: { correct: boolean; c
   return `${head}${wrong}\n${details(word, user)}`.trimEnd();
 }
 
-function when(ts: number, now: number, tz: string): string {
-  const day = localDate(ts, tz);
-  const today = localDate(now, tz);
-  const time = localTime(ts, tz);
-  if (day === today) return `сегодня в ${time}`;
-  if (day === addDays(today, 1)) return `завтра в ${time}`;
-  return day.split('-').reverse().join('.');
-}
-
-export function doneText(
-  nextDueAt: number | null,
-  now: number,
-  user: User,
-  opts: { noWords: boolean; moreLabel: string | null },
-): string {
+export function doneText(user: User, opts: { noWords: boolean; moreLabel: string | null }): string {
   if (opts.noWords) return 'В словаре пока нет слов. Загрузи их командой <code>npm run import-words</code>.';
-  const lines = ['🎉 На сейчас всё!'];
-  if (nextDueAt !== null) lines.push(`Следующее повторение — ${when(nextDueAt, now, user.tz)}.`);
-  lines.push('');
-  lines.push(
-    opts.moreLabel
-      ? `Хочешь ещё? «${opts.moreLabel}» — ещё ${user.new_per_day} новых слов прямо сейчас.`
-      : 'Новых слов в словаре не осталось — все уже в изучении.',
-  );
-  return lines.join('\n');
+  const more = opts.moreLabel
+    ? `Хочешь ещё? «${opts.moreLabel}» — ещё ${user.new_per_day} новых слов прямо сейчас.`
+    : 'Новых слов в словаре не осталось — все уже в изучении.';
+  return `🎉 На сейчас всё!\n\n${more}`;
 }
 
 function plural(n: number, one: string, few: string, many: string): string {

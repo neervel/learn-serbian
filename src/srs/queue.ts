@@ -5,7 +5,7 @@ import type { Card, User, Word } from '../types.ts';
 export type NextItem =
   | { kind: 'review'; card: Card; word: Word }
   | { kind: 'new'; word: Word }
-  | { kind: 'done'; nextDueAt: number | null };
+  | { kind: 'done' };
 
 interface CardWithWord {
   card: Card;
@@ -120,8 +120,5 @@ export function nextItem(db: Db, user: User, now: number, justAnsweredCardId?: n
   );
   if (ahead) return { kind: 'review', ...ahead };
 
-  const next = db.prepare('SELECT MIN(due) AS due FROM cards WHERE user_id = ?').get(user.id) as {
-    due: number | null;
-  };
-  return { kind: 'done', nextDueAt: next.due };
+  return { kind: 'done' };
 }

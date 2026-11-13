@@ -8,7 +8,11 @@ export type RatingValue = (typeof Rating)[keyof typeof Rating];
 /** Same numeric values as ts-fsrs State. */
 export const CardState = { New: 0, Learning: 1, Review: 2, Relearning: 3 } as const;
 
-const engine = fsrs({ request_retention: 0.9, maximum_interval: 365, enable_fuzz: true });
+const PARAMS = { request_retention: 0.9, maximum_interval: 365, enable_fuzz: true };
+const engine = fsrs(PARAMS);
+// Same algorithm without the short (minutes) learning steps: a correct answer
+// on a new card goes straight to an interval of a couple of days.
+const directEngine = fsrs({ ...PARAMS, learning_steps: [] });
 
 function toFsrs(s: SrsState): FsrsCard {
   return {
@@ -38,8 +42,18 @@ function fromFsrs(c: FsrsCard): SrsState {
   };
 }
 
-/** Applies an answer to a card and returns its new spaced-repetition state. */
-export function schedule(current: SrsState, rating: RatingValue, now: number): SrsState {
-  const result = engine.next(toFsrs(current), new Date(now), rating as Grade);
+/**
+ * Applies an answer to a card and returns its new spaced-repetition state.
+ * With `skipLearningSteps` a card that would enter the minutes-long learning
+ * steps is scheduled in days right away.
+ */
+export function schedule(
+  current: SrsState,
+  rating: RatingValue,
+  now: number,
+  opts: { skipLearningSteps?: boolean } = {},
+): SrsState {
+  const fsrsEngine = opts.skipLearningSteps ? directEngine : engine;
+  const result = fsrsEngine.next(toFsrs(current), new Date(now), rating as Grade);
   return fromFsrs(result.card);
 }

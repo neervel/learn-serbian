@@ -14,6 +14,7 @@
     "test": "node --test \"test/**/*.test.ts\"",
     "build-lemmas": "node scripts/build-lemmas.ts",
     "normalize-words": "node scripts/normalize-words.ts",
+    "reorder-words": "node scripts/reorder-words.ts",
     "import-words": "node scripts/import-words.ts"
   },
   "dependencies": {

@@ -9,8 +9,9 @@ function applyReview(
   rating: RatingValue,
   now: number,
   review: { exercise: Exercise; answer: string | null; correct: boolean; elapsedMs: number | null },
+  skipLearningSteps = false,
 ): void {
-  saveSrsState(db, card.id, schedule(card, rating, now));
+  saveSrsState(db, card.id, schedule(card, rating, now, { skipLearningSteps }));
   insertReview(db, {
     card_id: card.id,
     user_id: card.user_id,
@@ -56,15 +57,17 @@ export function answerChoice(
     const word = getWord(db, card.word_id);
     if (!word) return { status: 'stale' };
     const correct = chosenWordId === card.word_id;
-    // A new word guessed on first sight skips the short learning steps (Easy)
-    // and comes back in days; otherwise a plain right/wrong.
-    const rating = !correct ? Rating.Again : card.reps === 0 ? Rating.Easy : Rating.Good;
-    applyReview(db, card, rating, now, {
-      exercise: 'choice',
-      answer: chosenWordId,
-      correct,
-      elapsedMs,
-    });
+    // A new word guessed on first sight skips the minutes-long learning steps
+    // and comes back in a couple of days; a missed one goes through them.
+    const guessedNew = correct && card.reps === 0;
+    applyReview(
+      db,
+      card,
+      correct ? Rating.Good : Rating.Again,
+      now,
+      { exercise: 'choice', answer: chosenWordId, correct, elapsedMs },
+      guessedNew,
+    );
     return { status: 'answered', correct, word, chosen: getWord(db, chosenWordId), card };
   });
 }

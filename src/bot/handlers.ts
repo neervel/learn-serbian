@@ -98,7 +98,7 @@ export function createBot(config: Config, db: Db): Bot {
     if (item.kind === 'done') {
       clearPending(db, user.id);
       const canDoMore = remainingNewWords(db, user.id) > 0;
-      const text = doneText(item.nextDueAt, now, user, {
+      const text = doneText(user, {
         noWords: countActiveWords(db) === 0,
         moreLabel: canDoMore ? BTN.more : null,
       });

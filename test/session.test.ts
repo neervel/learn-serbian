@@ -59,7 +59,8 @@ test('a new word guessed on first sight goes straight to days; a missed one stay
   answerChoice(db, user, guessed.id, 0, 'w1', NOON, null);
   const g = getCard(db, guessed.id)!;
   assert.equal(g.state, 2);
-  assert.ok(g.due - NOON >= 2 * DAY, `due in ${(g.due - NOON) / DAY} days`);
+  const days = (g.due - NOON) / DAY;
+  assert.ok(days >= 2 && days <= 3, `due in ${days} days`);
 
   // Missed first, then right: the second answer is not "first sight" any more.
   const missed = startLearning(db, user, 'w2', NOON)!;

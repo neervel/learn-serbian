@@ -140,6 +140,18 @@ test('every answer gets its own message with the example, separate from the next
   assert.deepEqual(t.keys(), MENU_MORE, 'menu is back when the session is over');
 });
 
+test('false-friend warnings are not shown, ordinary notes are', async () => {
+  const db = makeDb(8);
+  db.prepare("UPDATE words SET note = 'Не «рец»', false_friend = 1 WHERE id = 'w1'").run();
+  db.prepare("UPDATE words SET note = 'Только множественное число.' WHERE id = 'w2'").run();
+  const t = setup(db);
+  await t.command('/learn');
+  await t.say('слово1');
+  assert.doesNotMatch(t.sent()[0]!.payload.text, /Ложный друг|Не «рец»/);
+  await t.say('слово2');
+  assert.match(t.sent()[0]!.payload.text, /💡 Только множественное число\./);
+});
+
 test('"Ещё урок" starts another lesson right away, any number of times', async () => {
   const db = makeDb(8);
   const t = setup(db);
