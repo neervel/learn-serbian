@@ -1,0 +1,22 @@
+[Unit]
+Description=Learn Serbian Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=serbian
+WorkingDirectory=/opt/learn-serbian
+EnvironmentFile=/opt/learn-serbian/.env
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning src/index.ts
+Restart=always
+RestartSec=5
+
+# The bot only needs to write its database.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/learn-serbian/data
+
+[Install]
+WantedBy=multi-user.target

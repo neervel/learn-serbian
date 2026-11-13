@@ -5,5 +5,6 @@ npm-debug.log*
 .env
 /data/app.db*
 /data/raw/
+/data/backups/
 .vscode/*
 /.idea/

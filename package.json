@@ -15,7 +15,8 @@
     "build-lemmas": "node scripts/build-lemmas.ts",
     "normalize-words": "node scripts/normalize-words.ts",
     "reorder-words": "node scripts/reorder-words.ts",
-    "import-words": "node scripts/import-words.ts"
+    "import-words": "node scripts/import-words.ts",
+    "backup-db": "node scripts/backup-db.ts"
   },
   "dependencies": {
     "grammy": "^1.46.0",
