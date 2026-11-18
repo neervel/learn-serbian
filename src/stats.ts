@@ -1,6 +1,4 @@
 import type { Db } from './db/db.ts';
-import { countActiveWords } from './db/repo.ts';
-import { dueCount, planLesson } from './lesson.ts';
 import { addDays, DAY_MS, localDate } from './time.ts';
 import type { User } from './types.ts';
 
@@ -10,16 +8,11 @@ export const LEARNED_INTERVAL_DAYS = 21;
 const HOUR_MS = 60 * 60 * 1000;
 
 export interface Stats {
-  totalWords: number;
   learning: number;
   learned: number;
   accuracy7d: number | null; // 0..1, null if no answers in the last 7 days
   answers7d: number;
   streakDays: number;
-  dueNow: number;
-  /** What the next lesson would consist of. */
-  lessonReviews: number;
-  lessonNew: number;
 }
 
 /** Days in a row with at least one answer, ending today (or yesterday if today is still empty). */
@@ -54,17 +47,12 @@ export function getStats(db: Db, user: User, now: number): Stats {
        WHERE user_id = ? AND ts >= ? AND exercise != 'known'`,
     )
     .get(user.id, now - 7 * DAY_MS) as { n: number; ok: number };
-  const lesson = planLesson(db, user, now);
 
   return {
-    totalWords: countActiveWords(db),
     learning: cards.total - cards.learned,
     learned: cards.learned,
     accuracy7d: acc.n === 0 ? null : acc.ok / acc.n,
     answers7d: acc.n,
     streakDays: streak(activeDates(db, user, now), localDate(now, user.tz)),
-    dueNow: dueCount(db, user.id, now),
-    lessonReviews: lesson.reviews.length,
-    lessonNew: lesson.fresh.length,
   };
 }

@@ -33,22 +33,18 @@ test('stats for a user with some history', () => {
   review(learned.id, NOON - 20 * DAY, false); // older than 7 days
 
   const s = getStats(db, user, NOON);
-  assert.equal(s.totalWords, 30);
   assert.equal(s.learned, 1);
   assert.equal(s.learning, 2);
   assert.equal(s.answers7d, 3);
   assert.ok(Math.abs(s.accuracy7d! - 2 / 3) < 1e-9);
   assert.equal(s.streakDays, 3);
-  assert.equal(s.dueNow, 2); // young is overdue, learning was missed recently
-  assert.equal(s.lessonReviews, 2);
-  assert.equal(s.lessonNew, 18); // a lesson of 20 with two cards to review
 });
 
 test('stats for a brand new user', () => {
   const db = makeDb(3);
   const s = getStats(db, makeUser(db), NOON);
   assert.deepEqual(
-    { learned: s.learned, learning: s.learning, accuracy7d: s.accuracy7d, streakDays: s.streakDays, dueNow: s.dueNow, lessonReviews: s.lessonReviews, lessonNew: s.lessonNew },
-    { learned: 0, learning: 0, accuracy7d: null, streakDays: 0, dueNow: 0, lessonReviews: 0, lessonNew: 3 },
+    { learned: s.learned, learning: s.learning, accuracy7d: s.accuracy7d, streakDays: s.streakDays },
+    { learned: 0, learning: 0, accuracy7d: null, streakDays: 0 },
   );
 });

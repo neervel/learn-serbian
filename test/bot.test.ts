@@ -260,7 +260,7 @@ test('/stats and /settings work from commands and from menu buttons', async () =
   const db = makeDb(5);
   const t = setup(db);
   await t.say('📊 Прогресс');
-  assert.match(t.sent()[0]!.payload.text, /Всего в словаре: 5/);
+  assert.match(t.sent()[0]!.payload.text, /Выучено: 0\nВ изучении: 0/);
   await t.say('⚙️ Настройки');
   assert.ok(t.buttons().some((b) => b.callback_data === 's:script:cyr'));
   await t.press('s:script:cyr');

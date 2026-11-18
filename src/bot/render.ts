@@ -112,15 +112,9 @@ export function statsText(s: Stats): string {
     '<b>Прогресс</b>',
     `Выучено: ${s.learned}`,
     `В изучении: ${s.learning}`,
-    `Всего в словаре: ${s.totalWords}`,
     '',
     `Точность за 7 дней: ${accuracy}`,
     `Серия: ${s.streakDays} ${plural(s.streakDays, 'день', 'дня', 'дней')} подряд`,
-    '',
-    `Сейчас на повтор: ${s.dueNow}`,
-    `Следующий урок: ${s.lessonReviews} на повтор, ${s.lessonNew} новых`,
-    '',
-    '<i>«Выучено» — слова с интервалом повторения больше 21 дня.</i>',
   ].join('\n');
 }
 
