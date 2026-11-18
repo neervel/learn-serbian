@@ -5,6 +5,11 @@ export interface Config {
   dbPath: string;
 }
 
+/** Where the database file is; scripts use the same setting as the bot. */
+export function dbPathFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  return env.DB_PATH?.trim() || 'data/app.db';
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const botToken = env.BOT_TOKEN?.trim();
   if (!botToken) {
@@ -18,5 +23,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     if (!Number.isSafeInteger(id)) throw new Error(`ALLOWED_USER_IDS: "${trimmed}" is not a numeric Telegram id`);
     allowedUserIds.add(id);
   }
-  return { botToken, allowedUserIds, dbPath: env.DB_PATH?.trim() || 'data/app.db' };
+  return { botToken, allowedUserIds, dbPath: dbPathFromEnv(env) };
 }

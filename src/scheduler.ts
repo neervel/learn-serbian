@@ -1,5 +1,5 @@
 import { fsrs, type Card as FsrsCard, type Grade } from 'ts-fsrs';
-import type { SrsState } from '../types.ts';
+import type { SrsState } from './types.ts';
 
 /** Same numeric values as ts-fsrs Rating. */
 export const Rating = { Again: 1, Hard: 2, Good: 3, Easy: 4 } as const;
@@ -39,6 +39,24 @@ function fromFsrs(c: FsrsCard): SrsState {
     scheduled_days: c.scheduled_days,
     learning_steps: c.learning_steps,
     last_review: c.last_review ? c.last_review.getTime() : null,
+  };
+}
+
+/** Days until a word the user marked as already known is checked for the first time. */
+export const KNOWN_INTERVAL_DAYS = 60;
+
+/** State of a card for a word the user already knows: in review, with a long interval. */
+export function knownState(now: number): SrsState {
+  return {
+    due: now + KNOWN_INTERVAL_DAYS * 24 * 60 * 60 * 1000,
+    stability: KNOWN_INTERVAL_DAYS,
+    difficulty: 3,
+    state: CardState.Review,
+    reps: 1,
+    lapses: 0,
+    scheduled_days: KNOWN_INTERVAL_DAYS,
+    learning_steps: 0,
+    last_review: now,
   };
 }
 

@@ -51,7 +51,7 @@ export function localTime(ts: number, tz: string): string {
 
 /**
  * Timestamp of the most recent local midnight. On the two DST-switch days a
- * year this is off by an hour, which is fine for daily limits.
+ * year this is off by an hour, which is fine for "has the user studied today".
  */
 export function startOfLocalDay(ts: number, tz: string): number {
   const p = parts(ts, tz);

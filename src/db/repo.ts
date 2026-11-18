@@ -8,8 +8,9 @@ function row<T>(value: unknown): T | undefined {
 // ---------- users ----------
 
 export const DEFAULT_REMIND_AT = '19:00';
+export const DEFAULT_LESSON_SIZE = 20;
 
-export function getUserByTgId(db: Db, tgId: number): User | undefined {
+function getUserByTgId(db: Db, tgId: number): User | undefined {
   return row<User>(db.prepare('SELECT * FROM users WHERE tg_id = ?').get(tgId));
 }
 
@@ -20,8 +21,9 @@ export function getUser(db: Db, id: number): User | undefined {
 export function getOrCreateUser(db: Db, tgId: number, now: number): { user: User; created: boolean } {
   const existing = getUserByTgId(db, tgId);
   if (existing) return { user: existing, created: false };
-  db.prepare('INSERT INTO users (tg_id, remind_at, created_at) VALUES (?, ?, ?)').run(
+  db.prepare('INSERT INTO users (tg_id, lesson_size, remind_at, created_at) VALUES (?, ?, ?, ?)').run(
     tgId,
+    DEFAULT_LESSON_SIZE,
     DEFAULT_REMIND_AT,
     now,
   );
@@ -30,23 +32,17 @@ export function getOrCreateUser(db: Db, tgId: number, now: number): { user: User
 
 export interface UserSettings {
   script?: Script;
-  new_per_day?: number;
+  lesson_size?: number;
   remind_at?: string | null;
   tz?: string;
 }
 
+const SETTING_COLUMNS = ['script', 'lesson_size', 'remind_at', 'tz'] as const;
+
 export function updateUserSettings(db: Db, userId: number, patch: UserSettings): void {
-  if (patch.script !== undefined) {
-    db.prepare('UPDATE users SET script = ? WHERE id = ?').run(patch.script, userId);
-  }
-  if (patch.new_per_day !== undefined) {
-    db.prepare('UPDATE users SET new_per_day = ? WHERE id = ?').run(patch.new_per_day, userId);
-  }
-  if (patch.remind_at !== undefined) {
-    db.prepare('UPDATE users SET remind_at = ? WHERE id = ?').run(patch.remind_at, userId);
-  }
-  if (patch.tz !== undefined) {
-    db.prepare('UPDATE users SET tz = ? WHERE id = ?').run(patch.tz, userId);
+  for (const column of SETTING_COLUMNS) {
+    const value = patch[column];
+    if (value !== undefined) db.prepare(`UPDATE users SET ${column} = ? WHERE id = ?`).run(value, userId);
   }
 }
 

@@ -6,9 +6,10 @@
 import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { dbPathFromEnv } from '../src/config.ts';
 
 const KEEP = 14;
-const dbPath = process.env.DB_PATH?.trim() || 'data/app.db';
+const dbPath = dbPathFromEnv();
 const dir = join(dirname(dbPath), 'backups');
 const target = join(dir, `app-${new Date().toISOString().slice(0, 10)}.db`);
 

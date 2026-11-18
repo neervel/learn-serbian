@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS users (
   id          INTEGER PRIMARY KEY,
   tg_id       INTEGER NOT NULL UNIQUE,
   script      TEXT    NOT NULL DEFAULT 'lat' CHECK (script IN ('lat', 'cyr')),
-  new_per_day INTEGER NOT NULL DEFAULT 10,
+  lesson_size INTEGER NOT NULL DEFAULT 20,            -- words per lesson
   remind_at   TEXT,                                   -- 'HH:MM' in user's tz, NULL = off
   tz          TEXT    NOT NULL DEFAULT 'Europe/Belgrade',
   last_reminded_on TEXT,                              -- 'YYYY-MM-DD' in user's tz
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   user_id    INTEGER NOT NULL REFERENCES users (id),
   ts         INTEGER NOT NULL,                        -- unix ms
   rating     INTEGER NOT NULL,                        -- ts-fsrs Rating: 1 Again, 2 Hard, 3 Good, 4 Easy
-  exercise   TEXT    NOT NULL,                        -- 'choice' | 'typed' | 'known'
+  exercise   TEXT    NOT NULL,                        -- 'choice' | 'known'
   answer     TEXT,
   correct    INTEGER NOT NULL,
   elapsed_ms INTEGER
@@ -71,10 +71,11 @@ CREATE TABLE IF NOT EXISTS pending_questions (
   sent_at INTEGER NOT NULL                            -- unix ms
 );
 
--- Extra new words a user asked for on a given day, on top of new_per_day.
-CREATE TABLE IF NOT EXISTS extra_new (
+-- Words of the lesson a user is taking, in the order they will be asked.
+-- A word leaves the list once it is answered correctly.
+CREATE TABLE IF NOT EXISTS lesson_items (
   user_id INTEGER NOT NULL REFERENCES users (id),
-  day     TEXT    NOT NULL,                           -- 'YYYY-MM-DD' in user's tz
-  count   INTEGER NOT NULL,
-  PRIMARY KEY (user_id, day)
+  pos     INTEGER NOT NULL,
+  word_id TEXT    NOT NULL REFERENCES words (id),
+  PRIMARY KEY (user_id, pos)
 );

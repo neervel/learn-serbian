@@ -1,5 +1,5 @@
 import type { Stats } from '../stats.ts';
-import { latToCyr } from '../text/translit.ts';
+import { latToCyr } from '../translit.ts';
 import type { User, Word } from '../types.ts';
 
 export function esc(s: string): string {
@@ -76,12 +76,21 @@ export function answerText(word: Word, user: User, result: { correct: boolean; c
   return `${head}${wrong}\n${details(word, user)}`.trimEnd();
 }
 
-export function doneText(user: User, opts: { noWords: boolean; moreLabel: string | null }): string {
-  if (opts.noWords) return 'В словаре пока нет слов. Загрузи их командой <code>npm run import-words</code>.';
-  const more = opts.moreLabel
-    ? `Хочешь ещё? «${opts.moreLabel}» — ещё ${user.new_per_day} новых слов прямо сейчас.`
-    : 'Новых слов в словаре не осталось — все уже в изучении.';
-  return `🎉 На сейчас всё!\n\n${more}`;
+/** Card of a word the user marked as already known. */
+export function knownText(word: Word, user: User): string {
+  return `👌 <b>${esc(sr(word, user))}</b> — ${esc(word.ru)}\nОтмечено как выученное.\n${details(word, user)}`.trimEnd();
+}
+
+const NOTHING_LEFT = 'Повторять пока нечего, а новые слова в словаре закончились.';
+
+/** End of a lesson; `moreLabel` is the button that starts the next one, if there is anything for it. */
+export function lessonDoneText(moreLabel: string | null): string {
+  return `🎉 Урок закончен!\n\n${moreLabel ? `Хочешь ещё? Нажми «${moreLabel}».` : NOTHING_LEFT}`;
+}
+
+/** Reply to "learn" when a lesson cannot be put together. */
+export function nothingToLearnText(noWords: boolean): string {
+  return noWords ? 'В словаре пока нет слов. Загрузи их командой <code>npm run import-words</code>.' : NOTHING_LEFT;
 }
 
 function plural(n: number, one: string, few: string, many: string): string {
@@ -108,7 +117,8 @@ export function statsText(s: Stats): string {
     `Точность за 7 дней: ${accuracy}`,
     `Серия: ${s.streakDays} ${plural(s.streakDays, 'день', 'дня', 'дней')} подряд`,
     '',
-    `На сегодня: ${s.dueToday} на повтор, ${s.newToday} новых`,
+    `Сейчас на повтор: ${s.dueNow}`,
+    `Следующий урок: ${s.lessonReviews} на повтор, ${s.lessonNew} новых`,
     '',
     '<i>«Выучено» — слова с интервалом повторения больше 21 дня.</i>',
   ].join('\n');
@@ -118,7 +128,7 @@ export function settingsText(user: User): string {
   return [
     '<b>Настройки</b>',
     `Алфавит: ${user.script === 'cyr' ? 'ћирилица' : 'latinica'}`,
-    `Новых слов в день: ${user.new_per_day}`,
+    `Слов в уроке: ${user.lesson_size}`,
     `Напоминание: ${user.remind_at ?? 'выключено'}`,
     `Часовой пояс: ${esc(user.tz)}`,
     '',
@@ -136,7 +146,7 @@ export function reminderText(due: number, fresh: number): string {
 export const START_TEXT = [
   'Zdravo! Это бот для изучения сербских слов.',
   '',
-  'Каждый день — несколько новых слов и повторение старых. Новое слово сначала попробуй угадать — многие похожи на русские. Не угадал — бот покажет перевод и пример и спросит ещё раз позже. Чем лучше помнишь слово, тем реже оно появляется.',
+  'В каждом уроке — повторение старых слов и немного новых. Новое слово сначала попробуй угадать — многие похожи на русские. Не угадал — бот покажет перевод и пример и спросит ещё раз позже. Чем лучше помнишь слово, тем реже оно появляется.',
   '',
   'Кнопки управления — внизу, под полем ввода.',
   '',

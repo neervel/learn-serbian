@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cyrToLat, latToCyr } from '../src/text/translit.ts';
+import { cyrToLat, latToCyr } from '../src/translit.ts';
 
 test('Cyrillic to Latin, including digraphs and capitals', () => {
   assert.equal(cyrToLat('кућа'), 'kuća');

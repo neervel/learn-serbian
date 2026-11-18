@@ -9,8 +9,7 @@
 //
 // Usage: node scripts/reorder-words.ts   (then: npm run import-words)
 
-import { writeFileSync } from 'node:fs';
-import { listWordFiles, readWordFile, validateWords } from '../src/content.ts';
+import { listWordFiles, readWordFile, reportProblems, writeWordFile } from '../src/content.ts';
 import type { WordEntry } from '../src/types.ts';
 
 /** Share of the list over which a group is spread (1 = evenly to the very end). */
@@ -38,15 +37,9 @@ placed.forEach((p, i) => {
   p.word.rank = i + 1;
 });
 
-for (const { path, entries } of files) {
-  writeFileSync(path, `[\n${entries.map((w) => JSON.stringify(w)).join(',\n')}\n]\n`);
-}
+for (const { path, entries } of files) writeWordFile(path, entries);
 
-const problems = validateWords(all);
-if (problems.length > 0) {
-  console.error(`${problems.length} problem(s):\n  ${problems.join('\n  ')}`);
-  process.exitCode = 1;
-}
+reportProblems(all);
 const ordered = placed.map((p) => p.word);
 console.log(`${ordered.length} words reordered. First lessons:`);
 for (let i = 0; i < 40; i += 10) {

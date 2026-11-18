@@ -1,13 +1,13 @@
 export type Script = 'lat' | 'cyr';
 export type Direction = 'sr-ru' | 'ru-sr';
-/** 'known' only appears in reviews recorded by an earlier version of the bot. */
-export type Exercise = 'choice' | 'typed' | 'known';
+/** 'known' is the "I already know this word" button, not an answer to a question. */
+export type Exercise = 'choice' | 'known';
 
 export interface User {
   id: number;
   tg_id: number;
   script: Script;
-  new_per_day: number;
+  lesson_size: number;
   remind_at: string | null;
   tz: string;
   last_reminded_on: string | null;

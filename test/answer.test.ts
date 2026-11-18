@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { findCard, getCard } from '../src/db/repo.ts';
-import { answerChoice, DONT_KNOW, startLearning } from '../src/session.ts';
-import { nextItem } from '../src/srs/queue.ts';
+import { createCard, getCard } from '../src/db/repo.ts';
+import { answerChoice, DONT_KNOW } from '../src/lesson.ts';
+import type { User } from '../src/types.ts';
 import { DAY, makeDb, makeUser, NOON } from './helpers.ts';
+
+const startLearning = (db: ReturnType<typeof makeDb>, user: User, wordId: string, now: number) =>
+  createCard(db, user.id, wordId, 'sr-ru', now);
 
 function reviewCount(db: ReturnType<typeof makeDb>): number {
   return (db.prepare('SELECT COUNT(*) AS n FROM reviews').get() as { n: number }).n;
@@ -93,30 +96,4 @@ test('repeated correct answers grow the interval past the "learned" threshold', 
   const final = getCard(db, card.id)!;
   assert.equal(final.state, 2);
   assert.ok(final.scheduled_days > 21, `interval ${final.scheduled_days} days`);
-});
-
-test('a whole first session: new words, then their learning steps, then done', () => {
-  const db = makeDb(3);
-  const user = makeUser(db);
-  let now = NOON;
-  let lastCard: number | undefined;
-  let steps = 0;
-  for (; steps < 50; steps++) {
-    const item = nextItem(db, user, now, lastCard);
-    if (item.kind === 'done') break;
-    if (item.kind === 'new') {
-      startLearning(db, user, item.word.id, now);
-    } else {
-      answerChoice(db, user, item.card.id, item.card.reps, item.word.id, now, null);
-      lastCard = item.card.id;
-    }
-    now += 5000;
-  }
-  assert.ok(steps < 50, 'session must end');
-  const cards = db.prepare('SELECT state, due FROM cards').all() as unknown as { state: number; due: number }[];
-  assert.equal(cards.length, 3);
-  for (const c of cards) {
-    assert.equal(c.state, 2);
-    assert.ok(c.due > now);
-  }
 });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadAllWords, validateWords } from '../src/content.ts';
-import { cyrToLat } from '../src/text/translit.ts';
+import { cyrToLat } from '../src/translit.ts';
 
 test('content/words is valid', () => {
   const words = loadAllWords();

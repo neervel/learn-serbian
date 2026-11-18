@@ -1,6 +1,7 @@
 import type { Db } from './db/db.ts';
-import { dueCount, newAvailable } from './srs/queue.ts';
-import { addDays, DAY_MS, localDate, startOfLocalDay } from './time.ts';
+import { countActiveWords } from './db/repo.ts';
+import { dueCount, planLesson } from './lesson.ts';
+import { addDays, DAY_MS, localDate } from './time.ts';
 import type { User } from './types.ts';
 
 /** A word counts as learned once its review interval is longer than this. */
@@ -15,8 +16,10 @@ export interface Stats {
   accuracy7d: number | null; // 0..1, null if no answers in the last 7 days
   answers7d: number;
   streakDays: number;
-  dueToday: number;
-  newToday: number;
+  dueNow: number;
+  /** What the next lesson would consist of. */
+  lessonReviews: number;
+  lessonNew: number;
 }
 
 /** Days in a row with at least one answer, ending today (or yesterday if today is still empty). */
@@ -39,7 +42,6 @@ function activeDates(db: Db, user: User, now: number): Set<string> {
 }
 
 export function getStats(db: Db, user: User, now: number): Stats {
-  const words = db.prepare('SELECT COUNT(*) AS n FROM words WHERE active = 1').get() as { n: number };
   const cards = db
     .prepare(
       `SELECT COALESCE(SUM(state = 2 AND scheduled_days > ?), 0) AS learned, COUNT(*) AS total
@@ -52,16 +54,17 @@ export function getStats(db: Db, user: User, now: number): Stats {
        WHERE user_id = ? AND ts >= ? AND exercise != 'known'`,
     )
     .get(user.id, now - 7 * DAY_MS) as { n: number; ok: number };
-  const endOfDay = startOfLocalDay(now, user.tz) + DAY_MS;
+  const lesson = planLesson(db, user, now);
 
   return {
-    totalWords: words.n,
+    totalWords: countActiveWords(db),
     learning: cards.total - cards.learned,
     learned: cards.learned,
     accuracy7d: acc.n === 0 ? null : acc.ok / acc.n,
     answers7d: acc.n,
     streakDays: streak(activeDates(db, user, now), localDate(now, user.tz)),
-    dueToday: dueCount(db, user.id, endOfDay),
-    newToday: newAvailable(db, user, now),
+    dueNow: dueCount(db, user.id, now),
+    lessonReviews: lesson.reviews.length,
+    lessonNew: lesson.fresh.length,
   };
 }

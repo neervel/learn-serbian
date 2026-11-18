@@ -7,15 +7,8 @@
 //
 // Usage: node scripts/normalize-words.ts
 
-import { writeFileSync } from 'node:fs';
-import { listWordFiles, readWordFile, validateWords } from '../src/content.ts';
-import { latToCyr } from '../src/text/translit.ts';
-import type { WordEntry } from '../src/types.ts';
-
-const FIELD_ORDER: (keyof WordEntry)[] = [
-  'id', 'lat', 'cyr', 'ru', 'pos', 'rank', 'gender', 'pres1sg', 'aspect', 'pair',
-  'tags', 'falseFriend', 'note', 'example',
-];
+import { listWordFiles, readWordFile, reportProblems, writeWordFile } from '../src/content.ts';
+import { latToCyr } from '../src/translit.ts';
 
 function slug(lat: string): string {
   return lat
@@ -55,19 +48,7 @@ for (const w of all) {
   }
 }
 
-for (const { path, entries } of files) {
-  const lines = entries.map((w) => {
-    const ordered: Record<string, unknown> = {};
-    for (const key of FIELD_ORDER) if (w[key] !== undefined) ordered[key] = w[key];
-    for (const [key, value] of Object.entries(w)) if (!(key in ordered)) ordered[key] = value;
-    return JSON.stringify(ordered);
-  });
-  writeFileSync(path, `[\n${lines.join(',\n')}\n]\n`);
-}
+for (const { path, entries } of files) writeWordFile(path, entries);
 
 console.log(`${all.length} words in ${files.length} file(s), ${filled} field(s) filled in`);
-const problems = validateWords(all);
-if (problems.length > 0) {
-  console.error(`${problems.length} problem(s):\n  ${problems.join('\n  ')}`);
-  process.exitCode = 1;
-}
+reportProblems(all);

@@ -1,5 +1,5 @@
-import type { Db } from '../db/db.ts';
-import type { Word } from '../types.ts';
+import type { Db } from './db/db.ts';
+import type { Word } from './types.ts';
 
 const POOL_SIZE = 12;
 const OPTIONS = 4;

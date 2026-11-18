@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { getWord, upsertWord } from '../src/db/repo.ts';
-import { buildOptions } from '../src/quiz/choice.ts';
+import { buildOptions } from '../src/choice.ts';
 import { makeDb, word } from './helpers.ts';
 
 test('four distinct options that include the answer', () => {

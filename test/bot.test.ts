@@ -71,10 +71,14 @@ function setup(db: Db, allowed: number[] = []) {
   };
 }
 
+/** The test user (Telegram id 7) with a given lesson size. */
+const addUser = (db: Db, lessonSize: number) =>
+  db.prepare('INSERT INTO users (tg_id, lesson_size, created_at) VALUES (7, ?, 0)').run(lessonSize);
 const count = (db: Db, table: string) => (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
 const MENU = ['📚 Учить', '📊 Прогресс', '⚙️ Настройки'];
 const MENU_MORE = ['➕ Ещё урок', '📊 Прогресс', '⚙️ Настройки'];
 const CONTROLS = ['🤷 Не знаю', '⏹ Хватит'];
+const CONTROLS_NEW = ['🤷 Не знаю', '👌 Уже знаю', '⏹ Хватит'];
 
 test('/start registers the user and shows the menu keyboard', async () => {
   const db = makeDb(5);
@@ -94,9 +98,9 @@ test('a new word is asked first; options are on the bottom keyboard, translation
   assert.match(first, /rec1/);
   assert.doesNotMatch(first, /слово1/, 'translation must not be in the question text');
   const keys = t.keys();
-  assert.equal(keys.length, 6); // 4 options + controls
+  assert.equal(keys.length, 7); // 4 options + controls
   assert.ok(keys.includes('слово1'));
-  assert.deepEqual(keys.slice(4), CONTROLS);
+  assert.deepEqual(keys.slice(4), CONTROLS_NEW);
   assert.equal(t.sent()[0]!.payload.reply_markup.resize_keyboard, true);
 
   await t.say('🤷 Не знаю');
@@ -110,34 +114,61 @@ test('a new word is asked first; options are on the bottom keyboard, translation
 test('guessing a new word shows its card and does not ask it again in the same lesson', async () => {
   const db = makeDb(8);
   const t = setup(db);
-  db.prepare('INSERT INTO users (tg_id, new_per_day, created_at) VALUES (7, 1, 0)').run();
+  addUser(db, 1);
   await t.command('/learn');
   await t.say('слово1');
   assert.equal(t.sent().length, 2, 'the card, then the end of the lesson');
   assert.match(t.sent()[0]!.payload.text, /✅.*rec1.*слово1/s);
   assert.equal(t.sent()[0]!.payload.reply_markup, undefined);
-  assert.match(t.sent()[1]!.payload.text, /На сейчас всё/);
+  assert.match(t.sent()[1]!.payload.text, /Урок закончен/);
 });
 
 test('every answer gets its own message with the example, separate from the next question', async () => {
   const db = makeDb(8);
   db.prepare("UPDATE words SET example_sr = 'Primer ' || lat, example_ru = 'Пример ' || ru").run();
   const t = setup(db);
-  db.prepare('INSERT INTO users (tg_id, new_per_day, created_at) VALUES (7, 1, 0)').run();
+  addUser(db, 2);
   await t.command('/learn');
   await t.say('🤷 Не знаю');
-  // Limit is 1, so the missed card comes back as a learning step: a familiar card now.
-  assert.doesNotMatch(t.sent().at(-1)!.payload.text, /Новое слово/);
-  await t.say('слово1');
+  await t.say('слово2');
   assert.equal(t.sent().length, 2, 'result and next question are separate messages');
-  assert.match(t.sent()[0]!.payload.text, /^✅ <b>rec1<\/b> — слово1\n/);
-  assert.match(t.sent()[0]!.payload.text, /Primer rec1\n<i>Пример слово1<\/i>/);
+  assert.match(t.sent()[0]!.payload.text, /^✅ <b>rec2<\/b> — слово2\n/);
+  assert.match(t.sent()[0]!.payload.text, /Primer rec2\n<i>Пример слово2<\/i>/);
   assert.doesNotMatch(t.sent()[0]!.payload.text, /Выбери перевод/);
+  // The missed word comes back at the end of the lesson, as a familiar card now.
   assert.match(t.sent()[1]!.payload.text, /^<b>rec1<\/b>\n\nВыбери перевод/);
   await t.say('слово1');
   assert.equal(t.sent().length, 2);
-  assert.match(t.sent()[1]!.payload.text, /^🎉 На сейчас всё/);
+  assert.match(t.sent()[1]!.payload.text, /^🎉 Урок закончен/);
   assert.deepEqual(t.keys(), MENU_MORE, 'menu is back when the session is over');
+});
+
+test('"Уже знаю" marks a new word as learned and moves on; it is not offered for familiar words', async () => {
+  const db = makeDb(8);
+  db.prepare("UPDATE words SET example_sr = 'Primer ' || lat, example_ru = 'Пример ' || ru").run();
+  const t = setup(db);
+  addUser(db, 2);
+  await t.command('/learn');
+  await t.say('👌 Уже знаю');
+  assert.equal(t.sent().length, 2, 'the card, then the next question');
+  assert.match(t.sent()[0]!.payload.text, /^👌 <b>rec1<\/b> — слово1\nОтмечено как выученное/);
+  assert.match(t.sent()[0]!.payload.text, /Primer rec1/);
+  assert.match(t.sent()[1]!.payload.text, /rec2/);
+  const card = db.prepare("SELECT state, scheduled_days, reps FROM cards WHERE word_id = 'w1'").get();
+  assert.deepEqual({ ...card }, { state: 2, scheduled_days: 60, reps: 1 });
+  await t.say('📊 Прогресс');
+  assert.match(t.sent()[0]!.payload.text, /Выучено: 1\n/);
+  assert.match(t.sent()[0]!.payload.text, /нет ответов/, 'does not count as an answer in the accuracy');
+
+  // rec2 is missed and comes back as a familiar word: no "Уже знаю" for it.
+  await t.say('🤷 Не знаю');
+  assert.match(t.sent().at(-1)!.payload.text, /Урок закончен/);
+  await t.say('➕ Ещё урок');
+  assert.match(t.sent()[0]!.payload.text, /^<b>rec2<\/b>/);
+  assert.deepEqual(t.keys().slice(4), CONTROLS);
+  await t.say('👌 Уже знаю');
+  assert.match(t.sent()[0]!.payload.text, /Выбери один из вариантов/);
+  assert.equal(count(db, 'reviews'), 2);
 });
 
 test('false-friend warnings are not shown, ordinary notes are', async () => {
@@ -155,7 +186,7 @@ test('false-friend warnings are not shown, ordinary notes are', async () => {
 test('"Ещё урок" starts another lesson right away, any number of times', async () => {
   const db = makeDb(8);
   const t = setup(db);
-  db.prepare('INSERT INTO users (tg_id, new_per_day, created_at) VALUES (7, 2, 0)').run();
+  addUser(db, 2);
   const finishLesson = async () => {
     for (let i = 0; i < 40; i++) {
       const p = db.prepare('SELECT w.ru FROM pending_questions q JOIN cards c ON c.id = q.card_id JOIN words w ON w.id = c.word_id').get() as { ru: string } | undefined;
@@ -167,11 +198,6 @@ test('"Ещё урок" starts another lesson right away, any number of times', 
   await finishLesson();
   assert.equal(count(db, 'cards'), 2);
   assert.match(t.sent().at(-1)!.payload.text, /Ещё урок/);
-
-  // "Учить" again the same day: nothing to do, but the offer is there.
-  await t.say('📚 Учить');
-  assert.match(t.sent()[0]!.payload.text, /На сейчас всё/);
-  assert.deepEqual(t.keys(), MENU_MORE);
 
   await t.say('➕ Ещё урок');
   assert.match(t.sent()[0]!.payload.text, /Новое слово/);
@@ -185,8 +211,11 @@ test('"Ещё урок" starts another lesson right away, any number of times', 
   await t.say('➕ Ещё урок');
   await finishLesson();
   assert.equal(count(db, 'cards'), 8);
-  assert.match(t.sent().at(-1)!.payload.text, /не осталось/);
+  assert.match(t.sent().at(-1)!.payload.text, /закончились/);
   assert.deepEqual(t.keys(), MENU);
+  await t.say('📚 Учить');
+  assert.match(t.sent()[0]!.payload.text, /Повторять пока нечего/);
+  assert.equal(t.sent().length, 1);
 });
 
 test('text that is not an option does not count as an answer', async () => {
@@ -218,32 +247,13 @@ test('long translations get one button per row, short ones two', async () => {
   const short = makeDb(8);
   const t1 = setup(short);
   await t1.command('/learn');
-  assert.deepEqual((t1.sent()[0]!.payload.reply_markup.keyboard as unknown[][]).map((r) => r.length), [2, 2, 2]);
+  assert.deepEqual((t1.sent()[0]!.payload.reply_markup.keyboard as unknown[][]).map((r) => r.length), [2, 2, 3]);
 
   const long = makeDb(8);
   long.prepare("UPDATE words SET ru = ru || ' — очень длинный перевод'").run();
   const t2 = setup(long);
   await t2.command('/learn');
-  assert.deepEqual((t2.sent()[0]!.payload.reply_markup.keyboard as unknown[][]).map((r) => r.length), [1, 1, 1, 1, 2]);
-});
-
-test('a full session ends with the "done" message', async () => {
-  const db = makeDb(6);
-  const t = setup(db);
-  db.prepare('INSERT INTO users (tg_id, new_per_day, created_at) VALUES (7, 2, 0)').run();
-  await t.command('/learn');
-  let done = false;
-  for (let i = 0; i < 40 && !done; i++) {
-    const pending = db.prepare('SELECT card_id FROM pending_questions').get() as { card_id: number } | undefined;
-    if (!pending) {
-      done = /На сейчас всё/.test(t.sent().at(-1)!.payload.text);
-      break;
-    }
-    const w = db.prepare('SELECT w.ru FROM cards c JOIN words w ON w.id = c.word_id WHERE c.id = ?').get(pending.card_id) as { ru: string };
-    await t.say(w.ru);
-  }
-  assert.ok(done, 'session should finish');
-  assert.equal(count(db, 'cards'), 2);
+  assert.deepEqual((t2.sent()[0]!.payload.reply_markup.keyboard as unknown[][]).map((r) => r.length), [1, 1, 1, 1, 3]);
 });
 
 test('/stats and /settings work from commands and from menu buttons', async () => {
@@ -254,10 +264,10 @@ test('/stats and /settings work from commands and from menu buttons', async () =
   await t.say('⚙️ Настройки');
   assert.ok(t.buttons().some((b) => b.callback_data === 's:script:cyr'));
   await t.press('s:script:cyr');
-  await t.press('s:new:20');
+  await t.press('s:size:30');
   await t.press('s:rem:off');
-  const user = db.prepare('SELECT script, new_per_day, remind_at FROM users').get();
-  assert.deepEqual({ ...user }, { script: 'cyr', new_per_day: 20, remind_at: null });
+  const user = db.prepare('SELECT script, lesson_size, remind_at FROM users').get();
+  assert.deepEqual({ ...user }, { script: 'cyr', lesson_size: 30, remind_at: null });
   await t.command('/learn');
   assert.match(t.sent()[0]!.payload.text, /реч1/);
   await t.command('/tz Europe/Moscow');
@@ -268,8 +278,10 @@ test('/stats and /settings work from commands and from menu buttons', async () =
 test('buttons from older messages get a hint instead of silence', async () => {
   const db = makeDb(5);
   const t = setup(db);
-  await t.press('a:1:0:w1');
-  assert.match(t.calls.find((c) => c.method === 'answerCallbackQuery')!.payload.text, /устарела/);
+  for (const data of ['a:1:0:w1', 's:new:20']) {
+    await t.press(data);
+    assert.match(t.calls.find((c) => c.method === 'answerCallbackQuery')!.payload.text, /устарела/);
+  }
   assert.equal(count(db, 'reviews'), 0);
 });
 

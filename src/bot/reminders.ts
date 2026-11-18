@@ -2,8 +2,8 @@ import type { Bot } from 'grammy';
 import type { ReplyKeyboardMarkup } from 'grammy/types';
 import type { Db } from '../db/db.ts';
 import { listUsersWithReminders, markReminded } from '../db/repo.ts';
-import { dueCount, newAvailable } from '../srs/queue.ts';
-import { localDate, localTime } from '../time.ts';
+import { answeredSince, dueCount, planLesson } from '../lesson.ts';
+import { localDate, localTime, startOfLocalDay } from '../time.ts';
 import type { User } from '../types.ts';
 import { reminderText } from './render.ts';
 
@@ -18,7 +18,8 @@ export interface Reminder {
 
 /**
  * Users whose reminder time has passed today, who haven't been reminded today
- * and who have something to do.
+ * and who have something to do: cards to review, or new words if they have not
+ * studied today yet.
  */
 export function pendingReminders(db: Db, now: number): Reminder[] {
   const out: Reminder[] = [];
@@ -28,8 +29,8 @@ export function pendingReminders(db: Db, now: number): Reminder[] {
     if (user.last_reminded_on === date) continue;
     if (localTime(now, user.tz) < user.remind_at) continue;
     const due = dueCount(db, user.id, now);
-    const fresh = newAvailable(db, user, now);
-    if (due === 0 && fresh === 0) continue;
+    const fresh = planLesson(db, user, now).fresh.length;
+    if (due === 0 && (fresh === 0 || answeredSince(db, user.id, startOfLocalDay(now, user.tz)))) continue;
     out.push({ user, date, due, fresh });
   }
   return out;
