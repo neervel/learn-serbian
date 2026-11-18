@@ -1,4 +1,4 @@
-import type { Db } from './db.ts';
+import { transaction, type Db } from './db.ts';
 import type { Card, Direction, Exercise, Script, SrsState, User, Word, WordEntry } from '../types.ts';
 
 function row<T>(value: unknown): T | undefined {
@@ -52,6 +52,15 @@ export function listUsersWithReminders(db: Db): User[] {
 
 export function markReminded(db: Db, userId: number, date: string): void {
   db.prepare('UPDATE users SET last_reminded_on = ? WHERE id = ?').run(date, userId);
+}
+
+/** Deletes everything the user has learned: cards, answer history, the current lesson. Settings stay. */
+export function resetProgress(db: Db, userId: number): void {
+  transaction(db, () => {
+    for (const table of ['pending_questions', 'lesson_items', 'reviews', 'cards']) {
+      db.prepare(`DELETE FROM ${table} WHERE user_id = ?`).run(userId);
+    }
+  });
 }
 
 // ---------- words ----------

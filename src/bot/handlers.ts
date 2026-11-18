@@ -8,6 +8,7 @@ import {
   getUser,
   getWord,
   markReminded,
+  resetProgress,
   setPending,
   updateUserSettings,
   type UserSettings,
@@ -101,8 +102,12 @@ function settingsKeyboard(user: User): InlineKeyboard {
     }
     kb.row();
   }
-  return kb;
+  return kb.text('🗑 Сбросить прогресс', 'reset:ask');
 }
+
+const RESET_CONFIRM_TEXT =
+  '<b>Сбросить прогресс?</b>\n\nУдалятся все слова в изучении и выученные, история ответов и серия. Настройки останутся. Отменить это нельзя.';
+const resetConfirmKeyboard = () => new InlineKeyboard().text('Да, сбросить', 'reset:yes').text('Отмена', 'reset:no');
 
 export function createBot(config: Config, db: Db): Bot {
   const bot = new Bot(config.botToken);
@@ -236,6 +241,25 @@ export function createBot(config: Config, db: Db): Bot {
       await ctx.editMessageText(settingsText(updated), { ...HTML, reply_markup: settingsKeyboard(updated) });
     } catch {
       // "message is not modified" when the same option is pressed twice
+    }
+  });
+
+  // "Reset progress": asks first, in place of the settings message.
+  bot.callbackQuery(/^reset:(ask|yes|no)$/, async (ctx) => {
+    const user = currentUser(ctx);
+    const step = ctx.match[1];
+    if (step === 'ask') {
+      await ctx.answerCallbackQuery();
+      await ctx.editMessageText(RESET_CONFIRM_TEXT, { ...HTML, reply_markup: resetConfirmKeyboard() });
+      return;
+    }
+    if (step === 'yes') resetProgress(db, user.id);
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageText(settingsText(user), { ...HTML, reply_markup: settingsKeyboard(user) });
+    if (step === 'yes') {
+      console.log(`user ${user.id} reset their progress`);
+      // A new message, to replace the answer buttons of a lesson that no longer exists.
+      await ctx.reply('Прогресс сброшен. Нажми «Учить», чтобы начать заново.', { reply_markup: menuKeyboard() });
     }
   });
 

@@ -275,6 +275,46 @@ test('/stats and /settings work from commands and from menu buttons', async () =
   assert.equal((db.prepare('SELECT tz FROM users').get() as { tz: string }).tz, 'Europe/Moscow');
 });
 
+test('progress can be reset from the settings, after a confirmation', async () => {
+  const db = makeDb(8);
+  const t = setup(db);
+  addUser(db, 2);
+  db.prepare("UPDATE users SET script = 'cyr'").run();
+  await t.command('/learn');
+  await t.say('слово1');
+  assert.equal(count(db, 'cards'), 2); // one answered, one being asked
+  await t.say('⚙️ Настройки');
+  assert.ok(t.buttons().some((b) => b.callback_data === 'reset:ask'));
+
+  await t.press('reset:ask');
+  const confirm = t.calls.find((c) => c.method === 'editMessageText')!;
+  assert.match(confirm.payload.text, /Сбросить прогресс\?/);
+  assert.equal(count(db, 'cards'), 2, 'nothing is deleted before the confirmation');
+  await t.press('reset:no');
+  assert.match(t.calls.find((c) => c.method === 'editMessageText')!.payload.text, /Настройки/);
+  assert.equal(count(db, 'cards'), 2);
+
+  await t.press('reset:yes');
+  for (const table of ['cards', 'reviews', 'pending_questions', 'lesson_items']) assert.equal(count(db, table), 0, table);
+  assert.equal((db.prepare('SELECT script, lesson_size FROM users').get() as { script: string }).script, 'cyr');
+  assert.match(t.sent()[0]!.payload.text, /Прогресс сброшен/);
+  assert.deepEqual(t.keys(), MENU);
+  await t.say('📚 Учить');
+  assert.match(t.sent()[0]!.payload.text, /Новое слово/);
+  assert.match(t.sent()[0]!.payload.text, /реч1/);
+});
+
+test('reset only touches the user who asked', async () => {
+  const db = makeDb(8);
+  const t = setup(db);
+  await t.command('/learn', 8);
+  await t.command('слово1', 8);
+  await t.command('/start');
+  await t.press('reset:yes');
+  assert.equal(count(db, 'cards'), 2);
+  assert.equal(count(db, 'reviews'), 1);
+});
+
 test('buttons from older messages get a hint instead of silence', async () => {
   const db = makeDb(5);
   const t = setup(db);
