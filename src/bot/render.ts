@@ -1,6 +1,6 @@
 import type { Stats } from '../stats.ts';
 import { latToCyr } from '../translit.ts';
-import type { User, Word } from '../types.ts';
+import type { Direction, User, Word } from '../types.ts';
 
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -60,18 +60,30 @@ function details(word: Word, user: User): string {
   return lines.join('\n');
 }
 
-export function questionText(word: Word, user: User, isNew: boolean): string {
+/** What an answer button for `word` says: its translation in the direction of the question. */
+export function optionLabel(word: Word, user: User, direction: Direction): string {
+  return direction === 'ru-sr' ? sr(word, user) : word.ru;
+}
+
+export function questionText(word: Word, user: User, isNew: boolean, direction: Direction = 'sr-ru'): string {
   const head = isNew ? '🆕 Новое слово\n\n' : '';
+  if (direction === 'ru-sr') return `${head}<b>${esc(word.ru)}</b>\n\nКак это по-сербски?`;
   const ask = isNew ? 'Как думаешь, что это значит?' : 'Выбери перевод:';
   return `${head}<b>${esc(sr(word, user))}</b>\n\n${ask}`;
 }
 
 /** Result of an answer: always the full card, with grammar and an example. */
-export function answerText(word: Word, user: User, result: { correct: boolean; chosen: Word | undefined }): string {
+export function answerText(
+  word: Word,
+  user: User,
+  result: { correct: boolean; chosen: Word | undefined; direction?: Direction },
+): string {
   const head = `${result.correct ? '✅' : '❌'} <b>${esc(sr(word, user))}</b> — ${esc(word.ru)}`;
   const wrong =
     !result.correct && result.chosen
-      ? `\nТвой ответ: ${esc(result.chosen.ru)} (это ${esc(sr(result.chosen, user))})`
+      ? result.direction === 'ru-sr'
+        ? `\nТвой ответ: ${esc(sr(result.chosen, user))} (это ${esc(result.chosen.ru)})`
+        : `\nТвой ответ: ${esc(result.chosen.ru)} (это ${esc(sr(result.chosen, user))})`
       : '';
   return `${head}${wrong}\n${details(word, user)}`.trimEnd();
 }

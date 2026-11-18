@@ -189,16 +189,18 @@ export interface PendingQuestion {
   user_id: number;
   card_id: number;
   reps: number;
+  direction: Direction;
   options: string[];
   sent_at: number;
 }
 
 export function setPending(db: Db, q: PendingQuestion): void {
   db.prepare(
-    `INSERT INTO pending_questions (user_id, card_id, reps, options, sent_at) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO pending_questions (user_id, card_id, reps, direction, options, sent_at) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT (user_id) DO UPDATE SET
-       card_id = excluded.card_id, reps = excluded.reps, options = excluded.options, sent_at = excluded.sent_at`,
-  ).run(q.user_id, q.card_id, q.reps, JSON.stringify(q.options), q.sent_at);
+       card_id = excluded.card_id, reps = excluded.reps, direction = excluded.direction,
+       options = excluded.options, sent_at = excluded.sent_at`,
+  ).run(q.user_id, q.card_id, q.reps, q.direction, JSON.stringify(q.options), q.sent_at);
 }
 
 export function getPending(db: Db, userId: number): PendingQuestion | undefined {

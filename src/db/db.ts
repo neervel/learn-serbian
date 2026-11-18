@@ -24,6 +24,10 @@ function migrate(db: Db): void {
     db.exec('ALTER TABLE users RENAME COLUMN new_per_day TO lesson_size');
   }
   db.exec('DROP TABLE IF EXISTS extra_new');
+  const pendingColumns = db.prepare('PRAGMA table_info(pending_questions)').all() as unknown as { name: string }[];
+  if (!pendingColumns.some((c) => c.name === 'direction')) {
+    db.exec("ALTER TABLE pending_questions ADD COLUMN direction TEXT NOT NULL DEFAULT 'sr-ru'");
+  }
 }
 
 export function transaction<T>(db: Db, fn: () => T): T {

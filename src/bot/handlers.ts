@@ -20,6 +20,7 @@ import {
   DONT_KNOW,
   markKnown,
   nextInLesson,
+  pickDirection,
   planLesson,
   startLesson,
 } from '../lesson.ts';
@@ -31,6 +32,7 @@ import {
   esc,
   knownText,
   lessonDoneText,
+  optionLabel,
   nothingToLearnText,
   questionText,
   settingsText,
@@ -61,12 +63,12 @@ export function menuKeyboard(withMore = false): Keyboard {
 }
 
 /** `isNew` adds the "already know it" button, which only makes sense on a word's first appearance. */
-function questionKeyboard(options: Word[], isNew: boolean): Keyboard {
+function questionKeyboard(labels: string[], isNew: boolean): Keyboard {
   const kb = new Keyboard();
-  const perRow = options.every((o) => o.ru.length <= TWO_COLUMN_MAX_LENGTH) ? 2 : 1;
-  options.forEach((o, i) => {
+  const perRow = labels.every((label) => label.length <= TWO_COLUMN_MAX_LENGTH) ? 2 : 1;
+  labels.forEach((label, i) => {
     if (i > 0 && i % perRow === 0) kb.row();
-    kb.text(o.ru);
+    kb.text(label);
   });
   kb.row().text(BTN.dontKnow);
   if (isNew) kb.text(BTN.known);
@@ -109,7 +111,8 @@ const RESET_CONFIRM_TEXT =
   '<b>Сбросить прогресс?</b>\n\nУдалятся все слова в изучении и выученные, история ответов и серия. Настройки останутся. Отменить это нельзя.';
 const resetConfirmKeyboard = () => new InlineKeyboard().text('Да, сбросить', 'reset:yes').text('Отмена', 'reset:no');
 
-export function createBot(config: Config, db: Db): Bot {
+/** `random` decides the direction of questions; tests pass their own. */
+export function createBot(config: Config, db: Db, random: () => number = Math.random): Bot {
   const bot = new Bot(config.botToken);
 
   // Private chats only, and only allowed users if a whitelist is configured.
@@ -149,10 +152,18 @@ export function createBot(config: Config, db: Db): Bot {
     // revealed after the user has tried to answer.
     const { card } = item;
     const options = buildOptions(db, item.word);
-    setPending(db, { user_id: user.id, card_id: card.id, reps: card.reps, options: options.map((o) => o.id), sent_at: now });
-    await ctx.reply(questionText(item.word, user, card.reps === 0), {
+    const direction = pickDirection(db, card, random);
+    setPending(db, {
+      user_id: user.id,
+      card_id: card.id,
+      reps: card.reps,
+      direction,
+      options: options.map((o) => o.id),
+      sent_at: now,
+    });
+    await ctx.reply(questionText(item.word, user, card.reps === 0, direction), {
       ...HTML,
-      reply_markup: questionKeyboard(options, card.reps === 0),
+      reply_markup: questionKeyboard(options.map((o) => optionLabel(o, user, direction)), card.reps === 0),
     });
   }
 
@@ -168,18 +179,23 @@ export function createBot(config: Config, db: Db): Bot {
       await sendNext(ctx, user);
       return true;
     }
-    const chosenId =
-      text === BTN.dontKnow ? DONT_KNOW : pending.options.find((id) => getWord(db, id)?.ru === text);
+    const { direction } = pending;
+    const labelOf = (id: string) => {
+      const word = getWord(db, id);
+      return word && optionLabel(word, user, direction);
+    };
+    const chosenId = text === BTN.dontKnow ? DONT_KNOW : pending.options.find((id) => labelOf(id) === text);
     if (chosenId === undefined) return false;
 
     const now = Date.now();
-    const outcome = answerChoice(db, user, pending.card_id, pending.reps, chosenId, now, now - pending.sent_at);
+    const elapsed = now - pending.sent_at;
+    const outcome = answerChoice(db, user, pending.card_id, pending.reps, chosenId, now, elapsed, direction);
     if (outcome.status === 'stale') {
       await sendNext(ctx, user);
       return true;
     }
     // The result is always its own message, with the example; the next question follows separately.
-    await ctx.reply(answerText(outcome.word, user, { correct: outcome.correct, chosen: outcome.chosen }), HTML);
+    await ctx.reply(answerText(outcome.word, user, { ...outcome, direction }), HTML);
     await sendNext(ctx, user);
     return true;
   }

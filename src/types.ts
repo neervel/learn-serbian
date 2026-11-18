@@ -1,7 +1,9 @@
 export type Script = 'lat' | 'cyr';
+/** Which way a question is asked: a Serbian word with Russian options, or the reverse. */
 export type Direction = 'sr-ru' | 'ru-sr';
 /** 'known' is the "I already know this word" button, not an answer to a question. */
-export type Exercise = 'choice' | 'known';
+/** 'reverse' is a multiple-choice question asked from Russian to Serbian. */
+export type Exercise = 'choice' | 'reverse' | 'known';
 
 export interface User {
   id: number;

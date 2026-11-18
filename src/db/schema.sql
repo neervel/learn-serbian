@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   user_id    INTEGER NOT NULL REFERENCES users (id),
   ts         INTEGER NOT NULL,                        -- unix ms
   rating     INTEGER NOT NULL,                        -- ts-fsrs Rating: 1 Again, 2 Hard, 3 Good, 4 Easy
-  exercise   TEXT    NOT NULL,                        -- 'choice' | 'known'
+  exercise   TEXT    NOT NULL,                        -- 'choice' | 'reverse' | 'known'
   answer     TEXT,
   correct    INTEGER NOT NULL,
   elapsed_ms INTEGER
@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS pending_questions (
   user_id INTEGER PRIMARY KEY REFERENCES users (id),
   card_id INTEGER NOT NULL REFERENCES cards (id),
   reps    INTEGER NOT NULL,                           -- card's review count when asked
+  direction TEXT  NOT NULL DEFAULT 'sr-ru',           -- 'sr-ru' | 'ru-sr': which way the question is asked
   options TEXT    NOT NULL,                           -- JSON array of word ids, in keyboard order
   sent_at INTEGER NOT NULL                            -- unix ms
 );

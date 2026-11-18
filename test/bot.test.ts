@@ -11,8 +11,9 @@ interface Call {
   payload: Record<string, any>;
 }
 
-function setup(db: Db, allowed: number[] = []) {
-  const bot = createBot({ botToken: '1:test', allowedUserIds: new Set(allowed), dbPath: ':memory:' }, db);
+/** `random` picks the direction of questions about familiar words: 0.9 never asks from Russian, 0 always does. */
+function setup(db: Db, allowed: number[] = [], random = () => 0.9) {
+  const bot = createBot({ botToken: '1:test', allowedUserIds: new Set(allowed), dbPath: ':memory:' }, db, random);
   bot.botInfo = {
     id: 1, is_bot: true, first_name: 'Test', username: 'test_bot', can_join_groups: false,
     can_read_all_group_messages: false, supports_inline_queries: false, can_connect_to_business: false,
@@ -169,6 +170,72 @@ test('"Уже знаю" marks a new word as learned and moves on; it is not offe
   await t.say('👌 Уже знаю');
   assert.match(t.sent()[0]!.payload.text, /Выбери один из вариантов/);
   assert.equal(count(db, 'reviews'), 2);
+});
+
+function addReview(db: Db, cardId: number, correct: boolean): void {
+  db.prepare(
+    `INSERT INTO reviews (card_id, user_id, ts, rating, exercise, correct)
+     VALUES (?, (SELECT id FROM users WHERE tg_id = 7), 0, ?, 'choice', ?)`,
+  ).run(cardId, correct ? 3 : 1, correct ? 1 : 0);
+}
+
+/** Gives the test user a card for `wordId` that is due and has been answered correctly `reps` times. */
+function addDueCard(db: Db, wordId: string, reps: number, due = 0): void {
+  const { lastInsertRowid: cardId } = db.prepare(
+    `INSERT INTO cards (user_id, word_id, direction, due, state, reps, stability, difficulty, scheduled_days, last_review, created_at)
+     VALUES ((SELECT id FROM users WHERE tg_id = 7), ?, 'sr-ru', ?, 2, ?, 3, 5, 3, 0, 0)`,
+  ).run(wordId, due, reps);
+  for (let i = 0; i < reps; i++) addReview(db, Number(cardId), true);
+}
+
+test('a word can be asked from Russian to Serbian', async () => {
+  const db = makeDb(8);
+  const t = setup(db, [], () => 0);
+  addUser(db, 3);
+  addDueCard(db, 'w1', 2);
+  addDueCard(db, 'w2', 1);
+  addDueCard(db, 'w3', 2);
+  // The rest of the dictionary is not due for a long time, so the lesson is these three words.
+  for (const id of ['w4', 'w5', 'w6', 'w7', 'w8']) addDueCard(db, id, 1, Date.now() + 1e10);
+  await t.command('/learn');
+  assert.equal(t.sent()[0]!.payload.text, '<b>слово1</b>\n\nКак это по-сербски?');
+  assert.ok(t.keys().includes('rec1'));
+  assert.ok(!t.keys().includes('слово1'), 'options are Serbian words');
+  assert.deepEqual(t.keys().slice(4), CONTROLS);
+
+  await t.say('rec1');
+  assert.match(t.sent()[0]!.payload.text, /^✅ <b>rec1<\/b> — слово1/);
+  assert.equal(count(db, "reviews WHERE exercise = 'reverse'"), 1);
+  assert.match(t.sent()[1]!.payload.text, /слово2.*Как это по-сербски/s);
+  await t.say('rec2');
+
+  assert.match(t.sent()[1]!.payload.text, /слово3.*Как это по-сербски/s);
+  const wrong = t.keys().find((k) => k.startsWith('rec') && k !== 'rec3')!;
+  await t.say(wrong);
+  const n = wrong.slice(3);
+  assert.match(t.sent()[0]!.payload.text, new RegExp(`^❌ <b>rec3</b> — слово3\\nТвой ответ: rec${n} \\(это слово${n}\\)`));
+});
+
+test('a new word asked from Russian keeps its header and the "already know" button', async () => {
+  const db = makeDb(8);
+  const t = setup(db, [], () => 0);
+  await t.command('/learn');
+  assert.equal(t.sent()[0]!.payload.text, '🆕 Новое слово\n\n<b>слово1</b>\n\nКак это по-сербски?');
+  assert.deepEqual(t.keys().slice(4), CONTROLS_NEW);
+  await t.say('rec1');
+  assert.match(t.sent()[0]!.payload.text, /^✅ <b>rec1<\/b> — слово1/);
+});
+
+test('questions from Russian use the alphabet from the settings', async () => {
+  const db = makeDb(8);
+  const t = setup(db, [], () => 0);
+  addUser(db, 1);
+  db.prepare("UPDATE users SET script = 'cyr'").run();
+  addDueCard(db, 'w1', 2);
+  await t.command('/learn');
+  assert.ok(t.keys().includes('реч1'));
+  await t.say('реч1');
+  assert.match(t.sent()[0]!.payload.text, /^✅ <b>реч1<\/b> — слово1/);
 });
 
 test('false-friend warnings are not shown, ordinary notes are', async () => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCard, getCard } from '../src/db/repo.ts';
-import { answerChoice, DONT_KNOW } from '../src/lesson.ts';
+import { answerChoice, DONT_KNOW, pickDirection, REVERSE_AFTER_CORRECT } from '../src/lesson.ts';
 import type { User } from '../src/types.ts';
 import { DAY, makeDb, makeUser, NOON } from './helpers.ts';
 
@@ -96,4 +96,22 @@ test('repeated correct answers grow the interval past the "learned" threshold', 
   const final = getCard(db, card.id)!;
   assert.equal(final.state, 2);
   assert.ok(final.scheduled_days > 21, `interval ${final.scheduled_days} days`);
+});
+
+test('the direction is a coin toss once the word has enough correct answers', () => {
+  const db = makeDb(3);
+  const user = makeUser(db);
+  const card = startLearning(db, user, 'w1', NOON);
+  const heads = () => 0.49;
+  const tails = () => 0.5;
+  const answer = (wordId: string, at: number) => answerChoice(db, user, card.id, getCard(db, card.id)!.reps, wordId, at, null);
+  const expected = (correct: number) => (correct >= REVERSE_AFTER_CORRECT ? 'ru-sr' : 'sr-ru');
+  assert.equal(pickDirection(db, card, heads), expected(0));
+  answer('w2', NOON); // wrong answers do not count
+  assert.equal(pickDirection(db, card, heads), expected(0));
+  answer('w1', NOON + 1);
+  assert.equal(pickDirection(db, card, heads), expected(1));
+  answer('w1', NOON + 2);
+  assert.equal(pickDirection(db, card, heads), expected(2));
+  assert.equal(pickDirection(db, card, tails), 'sr-ru');
 });

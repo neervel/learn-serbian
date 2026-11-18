@@ -159,11 +159,15 @@ test('a database from the older version is migrated on open', async () => {
     script TEXT NOT NULL DEFAULT 'lat', new_per_day INTEGER NOT NULL DEFAULT 10, remind_at TEXT,
     tz TEXT NOT NULL DEFAULT 'Europe/Belgrade', last_reminded_on TEXT, created_at INTEGER NOT NULL);
     CREATE TABLE extra_new (user_id INTEGER, day TEXT, count INTEGER);
+    CREATE TABLE pending_questions (user_id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL, reps INTEGER NOT NULL,
+      options TEXT NOT NULL, sent_at INTEGER NOT NULL);
     INSERT INTO users (tg_id, new_per_day, created_at) VALUES (5, 20, 0);`);
   old.close();
   const db = openDb(path);
   assert.equal(makeUser(db, 5).lesson_size, 20);
   assert.equal(makeUser(db, 6).lesson_size, 20);
+  const columns = db.prepare('PRAGMA table_info(pending_questions)').all() as unknown as { name: string }[];
+  assert.ok(columns.some((c) => c.name === 'direction'));
   db.close();
   openDb(path).close(); // opening again is a no-op
 });

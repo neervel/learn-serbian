@@ -12,7 +12,7 @@ import {
   saveSrsState,
 } from './db/repo.ts';
 import { knownState, Rating, schedule, type RatingValue } from './scheduler.ts';
-import type { Card, Exercise, SrsState, User, Word } from './types.ts';
+import type { Card, Direction, Exercise, SrsState, User, Word } from './types.ts';
 
 /** Share of a lesson given to words the user has not seen yet. */
 export const NEW_SHARE = 0.3;
@@ -156,6 +156,24 @@ function recordLessonAnswer(db: Db, userId: number, wordId: string, correct: boo
   ).run(userId, userId, wordId);
 }
 
+/**
+ * A word is asked from Russian to Serbian only after this many correct answers.
+ * Temporarily 0: every question, a new word included, is a coin toss. The
+ * intended value is 2.
+ */
+export const REVERSE_AFTER_CORRECT = 0;
+
+/**
+ * Which way to ask a card. Until the word has enough correct answers it is
+ * always shown in Serbian; after that it is a coin toss between the two directions.
+ */
+export function pickDirection(db: Db, card: Card, random: () => number = Math.random): Direction {
+  const r = db.prepare('SELECT COUNT(*) AS n FROM reviews WHERE card_id = ? AND correct = 1').get(card.id) as {
+    n: number;
+  };
+  return r.n >= REVERSE_AFTER_CORRECT && random() < 0.5 ? 'ru-sr' : 'sr-ru';
+}
+
 /** Marks "don't know" in the answer buttons. */
 export const DONT_KNOW = '-';
 
@@ -204,6 +222,7 @@ export function answerChoice(
   chosenWordId: string,
   now: number,
   elapsedMs: number | null,
+  direction: Direction = 'sr-ru',
 ): ChoiceOutcome {
   return transaction(db, (): ChoiceOutcome => {
     const asked = askedCard(db, user, cardId, expectedReps);
@@ -214,7 +233,8 @@ export function answerChoice(
     // A new word guessed on first sight skips the minutes-long learning steps
     // and comes back in a couple of days; a missed one goes through them.
     const state = schedule(card, rating, now, { skipLearningSteps: correct && card.reps === 0 });
-    saveAnswer(db, card, now, { state, rating, exercise: 'choice', answer: chosenWordId, correct, elapsedMs });
+    const exercise = direction === 'ru-sr' ? 'reverse' : 'choice';
+    saveAnswer(db, card, now, { state, rating, exercise, answer: chosenWordId, correct, elapsedMs });
     return { status: 'answered', correct, word, chosen: getWord(db, chosenWordId) };
   });
 }
