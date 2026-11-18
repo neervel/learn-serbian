@@ -3,6 +3,7 @@ import type { Config } from '../config.ts';
 import type { Db } from '../db/db.ts';
 import {
   countActiveWords,
+  getCard,
   getOrCreateUser,
   getPending,
   getUser,
@@ -11,6 +12,7 @@ import {
   resetProgress,
   setPending,
   updateUserSettings,
+  type PendingQuestion,
   type UserSettings,
 } from '../db/repo.ts';
 import { buildOptions } from '../choice.ts';
@@ -167,6 +169,23 @@ export function createBot(config: Config, db: Db, random: () => number = Math.ra
     });
   }
 
+  /**
+   * Sends the current question once more, with its buttons. Telegram apps
+   * sometimes keep showing the buttons of an earlier question; a tap on one
+   * of those lands here and brings the right ones back.
+   */
+  async function repeatQuestion(ctx: Context, user: User, pending: PendingQuestion): Promise<void> {
+    const word = getWord(db, getCard(db, pending.card_id)?.word_id ?? '');
+    const options = pending.options.map((id) => getWord(db, id)).filter((w) => w !== undefined);
+    if (!word || options.length === 0) return sendNext(ctx, user);
+    const isNew = pending.reps === 0;
+    const question = questionText(word, user, isNew, pending.direction);
+    await ctx.reply(`Выбери один из вариантов на кнопках внизу.\n\n${question}`, {
+      ...HTML,
+      reply_markup: questionKeyboard(options.map((o) => optionLabel(o, user, pending.direction)), isNew),
+    });
+  }
+
   /** Handles a tap on an answer button. Returns false if the text is not an answer to the current question. */
   async function handleAnswer(ctx: Context, user: User, text: string): Promise<boolean> {
     const pending = getPending(db, user.id);
@@ -287,8 +306,9 @@ export function createBot(config: Config, db: Db, random: () => number = Math.ra
   bot.on('message:text', async (ctx) => {
     const user = currentUser(ctx);
     if (await handleAnswer(ctx, user, ctx.message.text)) return;
-    if (getPending(db, user.id)) {
-      await ctx.reply('Выбери один из вариантов на кнопках внизу.');
+    const pending = getPending(db, user.id);
+    if (pending) {
+      await repeatQuestion(ctx, user, pending);
       return;
     }
     await ctx.reply('Нажми «Учить», чтобы начать.', { reply_markup: menuKeyboard() });

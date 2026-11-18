@@ -156,12 +156,8 @@ function recordLessonAnswer(db: Db, userId: number, wordId: string, correct: boo
   ).run(userId, userId, wordId);
 }
 
-/**
- * A word is asked from Russian to Serbian only after this many correct answers.
- * Temporarily 0: every question, a new word included, is a coin toss. The
- * intended value is 2.
- */
-export const REVERSE_AFTER_CORRECT = 0;
+/** A word is asked from Russian to Serbian only after this many correct answers. */
+export const REVERSE_AFTER_CORRECT = 2;
 
 /**
  * Which way to ask a card. Until the word has enough correct answers it is

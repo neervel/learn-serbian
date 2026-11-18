@@ -188,7 +188,7 @@ function addDueCard(db: Db, wordId: string, reps: number, due = 0): void {
   for (let i = 0; i < reps; i++) addReview(db, Number(cardId), true);
 }
 
-test('a word can be asked from Russian to Serbian', async () => {
+test('a word answered correctly twice can be asked from Russian to Serbian', async () => {
   const db = makeDb(8);
   const t = setup(db, [], () => 0);
   addUser(db, 3);
@@ -206,8 +206,9 @@ test('a word can be asked from Russian to Serbian', async () => {
   await t.say('rec1');
   assert.match(t.sent()[0]!.payload.text, /^✅ <b>rec1<\/b> — слово1/);
   assert.equal(count(db, "reviews WHERE exercise = 'reverse'"), 1);
-  assert.match(t.sent()[1]!.payload.text, /слово2.*Как это по-сербски/s);
-  await t.say('rec2');
+  // w2 has only one correct answer so far: still asked the usual way, whatever the coin says.
+  assert.match(t.sent()[1]!.payload.text, /^<b>rec2<\/b>\n\nВыбери перевод/);
+  await t.say('слово2');
 
   assert.match(t.sent()[1]!.payload.text, /слово3.*Как это по-сербски/s);
   const wrong = t.keys().find((k) => k.startsWith('rec') && k !== 'rec3')!;
@@ -216,14 +217,43 @@ test('a word can be asked from Russian to Serbian', async () => {
   assert.match(t.sent()[0]!.payload.text, new RegExp(`^❌ <b>rec3</b> — слово3\\nТвой ответ: rec${n} \\(это слово${n}\\)`));
 });
 
-test('a new word asked from Russian keeps its header and the "already know" button', async () => {
+/** A lesson of w1, w2, w3, w4, each already answered correctly twice; nothing else is due. */
+function familiarWords(db: Db): void {
+  addUser(db, 4);
+  for (const id of ['w1', 'w2', 'w3', 'w4']) addDueCard(db, id, 2);
+  for (const id of ['w5', 'w6', 'w7', 'w8']) addDueCard(db, id, 1, Date.now() + 1e10);
+}
+
+test('the keyboard follows the direction of each question', async () => {
   const db = makeDb(8);
-  const t = setup(db, [], () => 0);
+  const coin = [0, 0.9, 0.9, 0];
+  const t = setup(db, [], () => coin.shift() ?? 0.9);
+  familiarWords(db);
   await t.command('/learn');
-  assert.equal(t.sent()[0]!.payload.text, '🆕 Новое слово\n\n<b>слово1</b>\n\nКак это по-сербски?');
-  assert.deepEqual(t.keys().slice(4), CONTROLS_NEW);
+  assert.ok(t.keys().includes('rec1'), 'from Russian: Serbian options');
   await t.say('rec1');
-  assert.match(t.sent()[0]!.payload.text, /^✅ <b>rec1<\/b> — слово1/);
+  assert.match(t.sent()[1]!.payload.text, /<b>rec2<\/b>/);
+  assert.ok(t.keys().includes('слово2') && !t.keys().some((k) => k.startsWith('rec')), 'from Serbian: Russian options');
+  await t.say('слово2');
+  assert.ok(t.keys().includes('слово3'));
+  await t.say('слово3');
+  assert.ok(t.keys().includes('rec4') && !t.keys().some((k) => k.startsWith('слово')));
+});
+
+test('a tap on a button left over from the previous question brings the right buttons back', async () => {
+  const db = makeDb(8);
+  const coin = [0, 0.9];
+  const t = setup(db, [], () => coin.shift() ?? 0.9);
+  familiarWords(db);
+  await t.command('/learn');
+  const stale = t.keys().find((k) => k.startsWith('rec') && k !== 'rec1')!;
+  await t.say('rec1');
+  const current = t.keys();
+  await t.say(stale);
+  assert.equal(t.sent().length, 1);
+  assert.match(t.sent()[0]!.payload.text, /<b>rec2<\/b>/);
+  assert.deepEqual(t.keys(), current);
+  assert.equal(count(db, 'reviews WHERE ts > 0'), 1, 'the stale tap is not counted as an answer');
 });
 
 test('questions from Russian use the alphabet from the settings', async () => {
@@ -291,8 +321,10 @@ test('text that is not an option does not count as an answer', async () => {
   await t.say('привет');
   assert.deepEqual(t.keys(), MENU);
   await t.command('/learn');
+  const asked = t.keys();
   await t.say('что-то не то');
-  assert.match(t.sent()[0]!.payload.text, /Выбери один из вариантов/);
+  assert.match(t.sent()[0]!.payload.text, /^Выбери один из вариантов.*rec1/s);
+  assert.deepEqual(t.keys(), asked, 'the question comes again with the same buttons');
   assert.equal(count(db, 'reviews'), 0);
   await t.say('слово1');
   assert.equal(count(db, 'reviews'), 1);
